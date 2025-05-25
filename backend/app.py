@@ -8,7 +8,10 @@ import os
 from cryptography.fernet import Fernet
 import base64
 from web3 import Web3
+from dotenv import load_dotenv
+from models import db, User
 
+load_dotenv()
 app = Flask(__name__)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://wallet:wallet@localhost:5432/wallet'
@@ -18,7 +21,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'super-secret-key'
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)  # ważność tokena
 
-db = SQLAlchemy(app)
+db.init_app(app)
 jwt = JWTManager(app)
 
 ENCRYPTION_SECRET = os.getenv('ENCRYPTION_SECRET')
@@ -28,8 +31,12 @@ if not ENCRYPTION_SECRET:
 
 fernet = Fernet(ENCRYPTION_SECRET.encode())
 
-INFURE_PROJECT_ID = os.getenv('INFURA_PROJECT_ID')
-w3 = Web3(Web3.HTTPProvider('https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID'))  # lub inny provider
+INFURA_PROJECT_ID = os.getenv('INFURA_PROJECT_ID')
+
+if not INFURA_PROJECT_ID:
+    raise RuntimeError("Brakuje INFURA_PROJECT_ID w ENV!")
+
+w3 = Web3(Web3.HTTPProvider(f'https://sepolia.infura.io/v3/{INFURA_PROJECT_ID}'))  # lub inny provider
 
 
 def generate_eth_wallet():
@@ -168,7 +175,7 @@ def get_balance():
         return jsonify({'error': 'User not found'}), 404
 
     balance_wei = w3.eth.get_balance(user.eth_address)
-    balance_eth = w3.fromWei(balance_wei, 'ether')
+    balance_eth = int(balance_wei) / 1e18
 
     return jsonify({'balance': str(balance_eth)}), 200
 
