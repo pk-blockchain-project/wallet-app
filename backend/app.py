@@ -129,7 +129,7 @@ def get_private_key():
 
 @app.route('/sign_transaction', methods=['POST'])
 @jwt_required()
-def sign_transaction():
+def sign_and_maybe_send_transaction():
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
     if not user:
@@ -140,30 +140,50 @@ def sign_transaction():
     value = data.get('value')  # w wei
     gas = data.get('gas', 21000)
     gas_price = data.get('gasPrice')
-    nonce = data.get('nonce')
+    nonce = data.get('nonce')  # można też automatycznie pobrać
     chain_id = data.get('chainId', 11155111)  # Sepolia chain id
+    broadcast = data.get('broadcast', False)
 
-    if not to_address or value is None or gas_price is None or nonce is None:
-        return jsonify({'error': 'Missing transaction parameters'}), 400
+    # Walidacja danych
+    if not to_address or value is None or gas_price is None:
+        return jsonify({'error': 'Missing required transaction parameters'}), 400
 
     try:
         private_key = fernet.decrypt(user.private_key_encrypted.encode())
     except Exception:
         return jsonify({'error': 'Could not decrypt private key'}), 500
 
-    tx = {
-        'to': to_address,
-        'value': int(value),
-        'gas': int(gas),
-        'gasPrice': int(gas_price),
-        'nonce': int(nonce),
-        'chainId': int(chain_id)
-    }
+    try:
+        # Automatyczne pobranie nonce jeśli nie podano
+        if nonce is None:
+            nonce = w3.eth.get_transaction_count(user.eth_address)
 
-    signed_tx = Account.sign_transaction(tx, private_key)
-    raw_tx_hex = signed_tx.rawTransaction.hex()
+        tx = {
+            'to': to_address,
+            'value': int(value),
+            'gas': int(gas),
+            'gasPrice': int(gas_price),
+            'nonce': int(nonce),
+            'chainId': int(chain_id)
+        }
 
-    return jsonify({'signed_tx': raw_tx_hex}), 200
+        signed_tx = Account.sign_transaction(tx, private_key)
+        raw_tx_hex = signed_tx.raw_transaction.hex()
+
+        if broadcast:
+            tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+            return jsonify({
+                'message': 'Transaction sent successfully',
+                'tx_hash': tx_hash.hex()
+            }), 200
+        else:
+            return jsonify({
+                'message': 'Transaction signed successfully',
+                'signed_tx': raw_tx_hex
+            }), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to sign/send transaction: {str(e)}'}), 500
+
 
 
 @app.route('/balance', methods=['GET'])
