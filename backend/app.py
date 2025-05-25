@@ -10,6 +10,7 @@ import base64
 from web3 import Web3
 from dotenv import load_dotenv
 from models import db, User
+import requests
 
 load_dotenv()
 app = Flask(__name__)
@@ -36,6 +37,11 @@ INFURA_PROJECT_ID = os.getenv('INFURA_PROJECT_ID')
 if not INFURA_PROJECT_ID:
     raise RuntimeError("Brakuje INFURA_PROJECT_ID w ENV!")
 
+ETHERSCAN_API_KEY = os.getenv('ETHERSCAN_API_KEY')
+
+if not ETHERSCAN_API_KEY:
+    raise RuntimeError("Brakuje klucza ETHERSCAN_API_KEY w ENV!")
+
 w3 = Web3(Web3.HTTPProvider(f'https://sepolia.infura.io/v3/{INFURA_PROJECT_ID}'))  # lub inny provider
 
 
@@ -47,6 +53,7 @@ def generate_eth_wallet():
         'address': account.address,  # np. "0xabc123..."
         'private_key_encrypted': encrypted_private_key.decode()  # zapisujemy jako string
     }
+
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -79,6 +86,7 @@ def register():
         'wallet_address': wallet['address']
     }), 201
 
+
 # Nowy endpoint do logowania
 @app.route('/login', methods=['POST'])
 def login():
@@ -98,6 +106,7 @@ def login():
     access_token = create_access_token(identity=str(user.id))
     return jsonify({'access_token': access_token}), 200
 
+
 # Przykładowy chroniony endpoint
 @app.route('/profile', methods=['GET'])
 @jwt_required()
@@ -111,6 +120,7 @@ def profile():
         'username': user.username,
         'email': user.email
     }), 200
+
 
 @app.route('/private_key', methods=['GET'])
 @jwt_required()
@@ -126,6 +136,7 @@ def get_private_key():
         return jsonify({'error': 'Could not decrypt private key'}), 500
 
     return jsonify({'private_key': decrypted_key}), 200
+
 
 @app.route('/sign_transaction', methods=['POST'])
 @jwt_required()
@@ -185,7 +196,6 @@ def sign_and_maybe_send_transaction():
         return jsonify({'error': f'Failed to sign/send transaction: {str(e)}'}), 500
 
 
-
 @app.route('/balance', methods=['GET'])
 @jwt_required()
 def get_balance():
@@ -198,6 +208,68 @@ def get_balance():
     balance_eth = int(balance_wei) / 1e18
 
     return jsonify({'balance': str(balance_eth)}), 200
+
+
+@app.route('/transaction_history', methods=['GET'])
+@jwt_required()
+def transaction_history():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    address = user.eth_address.lower()
+
+    url = (
+        f'https://api.etherscan.io/v2/api'
+        f'?chainid=11155111'
+        f'&module=account'
+        f'&action=txlist'
+        f'&address={address}'
+        f'&startblock=0'
+        f'&endblock=99999999'
+        f'&page=1'
+        f'&offset=10'
+        f'&sort=asc'
+        f'&apikey={ETHERSCAN_API_KEY}'
+    )
+
+    try:
+        # User-Agent by uniknąć blokad
+        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        if response.status_code != 200:
+            return jsonify({'error': f'HTTP Error {response.status_code}', 'body': response.text}), 502
+
+        data = response.json()
+
+        if data.get('status') != '1':
+            # status 0 oznacza brak transakcji lub błąd (np. limit API)
+            return jsonify({'message': 'No transactions found or failed to fetch'}), 200
+
+        txs = data.get('result', [])
+
+        formatted = []
+        for tx in txs:
+            direction = "outgoing" if tx['from'].lower() == address else "incoming"
+            formatted.append({
+                'hash': tx['hash'],
+                'from': tx['from'],
+                'to': tx['to'],
+                'value_wei': tx['value'],
+                'value_eth': str(int(tx['value']) / 1e18),
+                'timestamp': int(tx['timeStamp']),
+                'blockNumber': tx['blockNumber'],
+                'gasUsed': tx['gasUsed'],
+                'gasPrice': tx['gasPrice'],
+                'is_error': tx['isError'],
+                'direction': direction
+            })
+
+        return jsonify({'transactions': formatted}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch transaction history: {str(e)}'}), 500
 
 
 if __name__ == '__main__':
