@@ -22,6 +22,14 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'super-secret-key'
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)  # ważność tokena
 
+# Enable CORS for frontend development
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
 db.init_app(app)
 jwt = JWTManager(app)
 
@@ -159,6 +167,20 @@ def sign_and_maybe_send_transaction():
     if not to_address or value is None or gas_price is None:
         return jsonify({'error': 'Missing required transaction parameters'}), 400
 
+    # Validate address format
+    if not w3.is_address(to_address):
+        return jsonify({'error': 'Invalid destination address format'}), 400
+
+    # Validate numeric values
+    try:
+        value = int(value)
+        gas = int(gas)
+        gas_price = int(gas_price)
+        if value < 0 or gas < 0 or gas_price < 0:
+            return jsonify({'error': 'Transaction values must be positive'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid numeric values in transaction'}), 400
+
     try:
         private_key = fernet.decrypt(user.private_key_encrypted.encode())
     except Exception:
@@ -169,14 +191,29 @@ def sign_and_maybe_send_transaction():
         if nonce is None:
             nonce = w3.eth.get_transaction_count(user.eth_address)
 
+        # Convert to checksum address and validate
+        to_address_checksum = w3.to_checksum_address(to_address)
+
+        # Build transaction with proper Web3 format
         tx = {
-            'to': to_address,
-            'value': int(value),
-            'gas': int(gas),
-            'gasPrice': int(gas_price),
-            'nonce': int(nonce),
-            'chainId': int(chain_id)
+            'to': to_address_checksum,
+            'value': value,
+            'gas': gas,
+            'gasPrice': gas_price,
+            'nonce': nonce,
+            'chainId': chain_id
         }
+
+        # Validate transaction before signing
+        try:
+            # Check if sender has enough balance
+            sender_balance = w3.eth.get_balance(user.eth_address)
+            total_cost = value + (gas * gas_price)
+            if sender_balance < total_cost:
+                return jsonify({'error': 'Insufficient balance for transaction'}), 400
+                
+        except Exception as e:
+            return jsonify({'error': f'Failed to validate transaction: {str(e)}'}), 400
 
         signed_tx = Account.sign_transaction(tx, private_key)
         raw_tx_hex = signed_tx.raw_transaction.hex()
@@ -270,6 +307,17 @@ def transaction_history():
 
     except Exception as e:
         return jsonify({'error': f'Failed to fetch transaction history: {str(e)}'}), 500
+
+
+@app.route('/wallet_address', methods=['GET'])
+@jwt_required()
+def get_wallet_address():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    return jsonify({'address': user.eth_address}), 200
 
 
 if __name__ == '__main__':
