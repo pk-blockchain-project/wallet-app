@@ -32,6 +32,8 @@ h1 {
   flex-direction: column;
   height: 100vh;
   background-color: #f0f2f5;
+  position: relative; /* Ensure proper stacking context */
+  overflow: hidden; /* Contain overflow to the app container */
 }
 
 /* App header */
@@ -44,6 +46,9 @@ h1 {
   justify-content: space-between;
   padding: 0 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: sticky; /* Keep the header in place during scroll */
+  top: 0;
+  z-index: 100; /* Ensure header stays above other content */
 }
 
 .app-header h1 {
@@ -98,12 +103,14 @@ h1 {
   padding: 24px;
   display: flex;
   justify-content: center;
-  align-items: center;
-  overflow: auto;
+  align-items: flex-start; /* Change to flex-start to avoid content being pushed under header */
+  overflow-y: auto; /* Explicitly ensure vertical overflow is scrollable */
+  overflow-x: hidden; /* Prevent horizontal scrolling */
 }
 
 .app-content-full {
   padding: 0;
+  padding-top: 24px; /* Add padding top to prevent content from being hidden under header */
 }
 
 /* Card styles */
@@ -262,6 +269,8 @@ h1 {
   flex-direction: column;
   gap: 20px; /* Consistent gap between all wallet sections */
   padding: 20px 0;
+  padding-bottom: 50px; /* Add extra space at the bottom for better scrolling */
+  margin-top: 10px; /* Add some margin at the top to prevent being hidden under header */
   align-items: center; /* Center all cards horizontally */
 }
 
