@@ -218,7 +218,7 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({
               <div className="tx-detail-row">
                 <div className="tx-detail-label">From</div>
                 <div className="tx-detail-value">
-                  <a href={`https://etherscan.io/address/${selectedTx.from}`} target="_blank" rel="noopener noreferrer">
+                  <a href={`https://sepolia.etherscan.io/address/${selectedTx.from}`} target="_blank" rel="noopener noreferrer">
                     <HighlightAddress address={selectedTx.from} currentUserAddress={currentUserAddress} truncate={false} />
                   </a>
                 </div>
@@ -226,7 +226,7 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({
               <div className="tx-detail-row">
                 <div className="tx-detail-label">To</div>
                 <div className="tx-detail-value">
-                  <a href={`https://etherscan.io/address/${selectedTx.to}`} target="_blank" rel="noopener noreferrer">
+                  <a href={`https://sepolia.etherscan.io/address/${selectedTx.to}`} target="_blank" rel="noopener noreferrer">
                     <HighlightAddress address={selectedTx.to} currentUserAddress={currentUserAddress} truncate={false} />
                   </a>
                 </div>
@@ -245,7 +245,7 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({
               </div>
               <div className="tx-detail-actions">
                 <a 
-                  href={`https://etherscan.io/tx/${selectedTx.hash}`} 
+                  href={`https://sepolia.etherscan.io/tx/${selectedTx.hash}`} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="tx-action-btn"
