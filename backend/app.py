@@ -216,10 +216,19 @@ def sign_and_maybe_send_transaction():
             return jsonify({'error': f'Failed to validate transaction: {str(e)}'}), 400
 
         signed_tx = Account.sign_transaction(tx, private_key)
-        raw_tx_hex = signed_tx.raw_transaction.hex()
+        
+        # Extract the raw_transaction attribute differently depending on web3.py version
+        if hasattr(signed_tx, 'raw_transaction'):
+            # For older web3.py versions
+            raw_tx = signed_tx.raw_transaction
+            raw_tx_hex = raw_tx.hex()
+        else:
+            # For web3.py v6+ which returns a different structure
+            raw_tx = signed_tx.rawTransaction
+            raw_tx_hex = raw_tx.hex()
 
         if broadcast:
-            tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+            tx_hash = w3.eth.send_raw_transaction(raw_tx)
             return jsonify({
                 'message': 'Transaction sent successfully',
                 'tx_hash': tx_hash.hex()
