@@ -183,6 +183,14 @@ function App() {
   async function handleLogin(username: string, password: string) {
     setLoading(true)
     setLoginError(null)
+    
+    // Clear any previous user data first
+    setUsername('')
+    setEmail('')
+    setBalance('0.00')
+    setWalletAddress('')
+    setTransactions([])
+    
     try {
       const res = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
@@ -191,6 +199,8 @@ function App() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Login failed')
+      
+      // Set the token after clearing previous state
       setToken(data.access_token)
       await fetchProfileAndBalance(data.access_token)
     } catch (e: any) {
@@ -224,11 +234,30 @@ function App() {
 
   // Logout
   function handleLogout() {
+    // Reset auth state
     setToken(null)
+    setLoginError(null)
+    setRegisterError(null)
+    
+    // Reset user profile data
     setUsername('')
     setEmail('')
+    
+    // Reset wallet data
     setBalance('0.00')
+    setWalletAddress('')
+    setTransactions([])
+    setTransactionsLoading(false)
   }
+
+  // Initialize app state - make sure we start clean
+  useEffect(() => {
+    // Clear any potential stale data on app initialization
+    setBalance('0.00')
+    setWalletAddress('')
+    setTransactions([])
+    setTransactionsLoading(false)
+  }, []); // Run only once on component mount
 
   // Set up periodic refresh of balance and transaction history
   useEffect(() => {
